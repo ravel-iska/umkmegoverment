@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String    @id @default(uuid())
+  email      String    @unique
+  name       String
+  role       String    @default("Pembeli") // Admin, Penjual, Pembeli
+  password   String?   // Opsional jika pakai login Google
+  phone      String?
+  address    String?
+  avatar     String?
+  isBlocked  Boolean   @default(false)
+  isVerified Boolean   @default(false) // Untuk backward compatibility
+  verificationStatus String @default("Unverified") // Unverified, Pending, Verified, Rejected
+  ktpProof   String?   // URL Bukti KTP
+  productProof String? // URL Bukti Sample Produk
+  productDescription String? // Deskripsi detail sampel produk untuk diverifikasi
+  coverImages  String? // URL Array JSON Sampul Toko
+  createdAt  DateTime  @default(now())
+  
+  products     Product[] // Relasi produk jika user ini adalah Penjual
+  orders       Order[]   @relation("BuyerOrders")
+  sellerOrders Order[]   @relation("SellerOrders")
+  reviews      Review[]
+
+  // Relasi Chat
+  sentMessages Message[]
+  conversationsAsUser1 Conversation[] @relation("User1Conversations")
+  conversationsAsUser2 Conversation[] @relation("User2Conversations")
+}
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String
+  slug        String    @unique
+  description String?
+  icon        String?
+  color       String?
+  
+  products    Product[]
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  description String
+  price       Float
+  stock       Int      @default(0)
+  image       String?
+  images      String?  // JSON Array URL gambar tambahan
+  video       String?  // URL Video Produk
+  rating      Float    @default(0)
+  sold        Int      @default(0)
+  featured    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  categoryId  String
+  sellerId    String
+  
+  category    Category @relation(fields: [categoryId], references: [id])
+  seller      User     @relation(fields: [sellerId], references: [id])
+  orderItems  OrderItem[]
+  reviews     Review[]
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  userId      String
+  sellerId    String?
+  totalAmount   Float
+  paymentMethod String      @default("COD") // COD, TRANSFER
+  paymentProof  String?     // URL to uploaded receipt if TRANSFER
+  status        String      @default("Pending") // Pending, Menunggu Verifikasi, Diproses, Dikirim, Selesai, Batal
+  trackingNumber String?    // Resi pengiriman
+  disbursementStatus String @default("Pending") // Pending, Disbursed (untuk Rekber)
+  createdAt     DateTime    @default(now())
+  
+  user        User        @relation("BuyerOrders", fields: [userId], references: [id])
+  seller      User?       @relation("SellerOrders", fields: [sellerId], references: [id])
+  items       OrderItem[]
+  reviews     Review[]
+}
+
+model OrderItem {
+  id        String  @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  price     Float
+  
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int      // 1-5 bintang
+  comment   String?
+  images    String?  // JSON Array URL foto ulasan
+  createdAt DateTime @default(now())
+
+  userId    String
+  productId String
+  orderId   String
+
+  user      User    @relation(fields: [userId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+  order     Order   @relation(fields: [orderId], references: [id])
+
+  @@unique([userId, productId, orderId]) // 1 review per order item
+}
+
+model Conversation {
+  id        String    @id @default(uuid())
+  user1Id   String    // Pihak yang memulai percakapan (Pembeli/Penjual)
+  user2Id   String?   // Target percakapan (Penjual lain). NULL jika targetnya adalah Admin Pusat.
+  
+  user1     User      @relation("User1Conversations", fields: [user1Id], references: [id])
+  user2     User?     @relation("User2Conversations", fields: [user2Id], references: [id])
+  
+  messages  Message[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  content        String
+  senderId       String       // ID pengirim sebenarnya. Jika Admin Pusat, gunakan string khusus "ADMIN".
+  
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  sender         User?        @relation(fields: [senderId], references: [id]) // Optional karena "ADMIN" tidak punya row di User jika admin global
+}
