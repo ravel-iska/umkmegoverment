@@ -5,24 +5,25 @@ import { createSession } from "@/lib/session";
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
+    const baseUrl = process.env.GOOGLE_REDIRECT_URI ? new URL(process.env.GOOGLE_REDIRECT_URI).origin : url.origin;
     const code = url.searchParams.get("code");
     const error = url.searchParams.get("error");
 
     if (error) {
-      return NextResponse.redirect(new URL("/login?error=GoogleLoginDibatalkan", request.url));
+      return NextResponse.redirect(new URL("/login?error=GoogleLoginDibatalkan", baseUrl));
     }
 
     if (!code) {
-      return NextResponse.redirect(new URL("/login?error=InvalidGoogleCode", request.url));
+      return NextResponse.redirect(new URL("/login?error=InvalidGoogleCode", baseUrl));
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${url.origin}/api/auth/callback/google`;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || `${baseUrl}/api/auth/callback/google`;
 
     if (!clientId || !clientSecret) {
       console.error("Google Client ID atau Secret belum dikonfigurasi.");
-      return NextResponse.redirect(new URL("/login?error=ServerConfigurationError", request.url));
+      return NextResponse.redirect(new URL("/login?error=ServerConfigurationError", baseUrl));
     }
 
     // 1. Tukar kode dengan Access Token
@@ -42,7 +43,7 @@ export async function GET(request: Request) {
 
     if (!tokenResponse.ok) {
       console.error("Error from Google Token API:", tokenData);
-      return NextResponse.redirect(new URL("/login?error=GoogleTokenError", request.url));
+      return NextResponse.redirect(new URL("/login?error=GoogleTokenError", baseUrl));
     }
 
     // 2. Ambil Profil Pengguna
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
 
     if (!userResponse.ok || !userData.email) {
       console.error("Error fetching Google user profile:", userData);
-      return NextResponse.redirect(new URL("/login?error=GoogleProfileError", request.url));
+      return NextResponse.redirect(new URL("/login?error=GoogleProfileError", baseUrl));
     }
 
     // 3. Cek atau Buat Pengguna di Database
@@ -90,14 +91,14 @@ export async function GET(request: Request) {
 
     // 5. Cek kelengkapan data
     if (!user.phone) {
-      return NextResponse.redirect(new URL("/lengkapi-profil", request.url));
+      return NextResponse.redirect(new URL("/lengkapi-profil", baseUrl));
     }
 
     // 6. Redirect ke beranda atau dashboard
-    return NextResponse.redirect(new URL("/", request.url));
+    return NextResponse.redirect(new URL("/", baseUrl));
 
   } catch (err) {
     console.error("Google Auth Callback Error:", err);
-    return NextResponse.redirect(new URL("/login?error=InternalServerError", request.url));
+    return NextResponse.redirect(new URL("/login?error=InternalServerError", baseUrl));
   }
 }
