@@ -30,7 +30,8 @@ export async function POST(request: Request) {
     });
 
     // Redirect back to verification page
-    return NextResponse.redirect(new URL("/admin/verifikasi-umkm", request.url));
+    const baseUrl = process.env.GOOGLE_REDIRECT_URI ? new URL(process.env.GOOGLE_REDIRECT_URI).origin : new URL(request.url).origin;
+    return NextResponse.redirect(new URL("/admin/verifikasi-umkm", baseUrl));
   } catch (error) {
     console.error("Error processing verification:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

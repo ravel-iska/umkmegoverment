@@ -102,10 +102,19 @@ export async function toggleVerifyUser(userId: string) {
 }
 
 export async function deleteProductAdmin(productId: string) {
-  const session = await getSession("admin_session");
-  if (!session || session.role !== "Admin") throw new Error("Unauthorized");
+  try {
+    const session = await getSession("admin_session");
+    if (!session || session.role !== "Admin") throw new Error("Unauthorized");
 
-  await db.product.delete({ where: { id: productId } });
-  revalidatePath("/admin");
-  return { success: true };
+    // Hapus ulasan dan pesanan terkait produk ini terlebih dahulu untuk mencegah error foreign key
+    await db.review.deleteMany({ where: { productId } });
+    await db.orderItem.deleteMany({ where: { productId } });
+    
+    await db.product.delete({ where: { id: productId } });
+    revalidatePath("/admin");
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error deleting product:", error);
+    return { success: false, error: error.message };
+  }
 }

@@ -208,7 +208,7 @@ export function PesananClient({ initialOrders }: { initialOrders: Order[] }) {
                         onChange={(e) => handleStatusChange(o.id, e.target.value)}
                         disabled={isPending === o.id}
                       >
-                        {STATUS_FLOW.filter((s) => s !== "Selesai" && s !== "Pending").map((s) => (
+                        {STATUS_FLOW.filter((s) => s !== "Pending").map((s) => (
                           <option key={s} value={s}>{s}</option>
                         ))}
                       </select>
