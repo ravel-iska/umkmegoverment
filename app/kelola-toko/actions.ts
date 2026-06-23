@@ -104,6 +104,9 @@ export async function deleteProduct(productId: string) {
     throw new Error("Unauthorized");
   }
 
+  // Hapus relasi yang terkait agar tidak ada foreign key error
+  await db.review.deleteMany({ where: { productId } });
+  await db.orderItem.deleteMany({ where: { productId } });
   await db.product.delete({ where: { id: productId } });
 
   revalidatePath("/kelola-toko");
