@@ -3,14 +3,14 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";
 
-// Sama persis dengan upload route — baca dari Railway Volume
-const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
+    // Dibaca di runtime, bukan build time
+    const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+
     // Di Next.js 15+, params harus di-await
     const { filename } = await params;
 
@@ -18,9 +18,12 @@ export async function GET(
       return new NextResponse("Filename is required", { status: 400 });
     }
 
-    const filepath = path.join(UPLOAD_DIR, filename);
+    const filepath = path.join(uploadDir, filename);
+
+    console.log(`[Assets] Looking for file: ${filepath}`);
 
     if (!existsSync(filepath)) {
+      console.warn(`[Assets] File not found: ${filepath}`);
       return new NextResponse("File not found", { status: 404 });
     }
 
@@ -43,8 +46,8 @@ export async function GET(
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });
-  } catch (error) {
-    console.error("Error reading file:", error);
+  } catch (error: any) {
+    console.error("[Assets] Error reading file:", error?.message || error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
