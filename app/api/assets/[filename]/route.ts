@@ -8,10 +8,16 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads")
 
 export async function GET(
   request: Request,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const filename = params.filename;
+    // Di Next.js 15+, params harus di-await
+    const { filename } = await params;
+
+    if (!filename) {
+      return new NextResponse("Filename is required", { status: 400 });
+    }
+
     const filepath = path.join(UPLOAD_DIR, filename);
 
     if (!existsSync(filepath)) {
@@ -42,4 +48,3 @@ export async function GET(
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
-
