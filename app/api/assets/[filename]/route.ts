@@ -3,35 +3,24 @@ import { readFile } from "fs/promises";
 import path from "path";
 import { existsSync } from "fs";
 
+// Sama persis dengan upload route — baca dari Railway Volume
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+
 export async function GET(
   request: Request,
   { params }: { params: { filename: string } }
 ) {
   try {
     const filename = params.filename;
-    
-    // Check multiple possible upload directories
-    const pathsToCheck = [
-      path.join(process.cwd(), "uploads", filename),
-      path.join(process.cwd(), "public", "uploads", filename),
-      path.join("/tmp", "uploads", filename)
-    ];
+    const filepath = path.join(UPLOAD_DIR, filename);
 
-    let filepath = null;
-    for (const p of pathsToCheck) {
-      if (existsSync(p)) {
-        filepath = p;
-        break;
-      }
-    }
-
-    if (!filepath) {
+    if (!existsSync(filepath)) {
       return new NextResponse("File not found", { status: 404 });
     }
 
     const fileBuffer = await readFile(filepath);
-    
-    // Determine content type based on extension
+
+    // Tentukan content type berdasarkan ekstensi
     const ext = path.extname(filename).toLowerCase();
     let contentType = "application/octet-stream";
     if (ext === ".jpg" || ext === ".jpeg") contentType = "image/jpeg";
@@ -39,6 +28,8 @@ export async function GET(
     else if (ext === ".webp") contentType = "image/webp";
     else if (ext === ".gif") contentType = "image/gif";
     else if (ext === ".pdf") contentType = "application/pdf";
+    else if (ext === ".mp4") contentType = "video/mp4";
+    else if (ext === ".mov") contentType = "video/quicktime";
 
     return new NextResponse(fileBuffer, {
       headers: {
@@ -51,3 +42,4 @@ export async function GET(
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }
+
