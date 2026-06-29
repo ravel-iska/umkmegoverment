@@ -6,8 +6,12 @@ import { sendNewOrderToSellerWhatsapp } from "@/lib/fonnte";
 export async function POST(request: Request) {
   try {
     const session = await getSession();
+    if (!session) {
+      return NextResponse.json({ error: "Unauthorized. Silakan login terlebih dahulu." }, { status: 401 });
+    }
+
     const body = await request.json();
-    const { items, shippingAddress, phone, notes, buyerName, email, paymentMethod } = body;
+    const { items, shippingAddress, phone, notes, buyerName, email, paymentMethod, paymentProof } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "Keranjang belanja kosong." }, { status: 400 });
@@ -17,62 +21,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Alamat pengiriman dan nomor telepon wajib diisi." }, { status: 400 });
     }
 
-    // Determine the userId for the order (logged in user OR guest buyer)
-    let userId: string;
+    const userId = session.id;
 
-    if (session) {
-      userId = session.id;
-      // Ambil status pengguna terlebih dahulu
-      const currentUser = await db.user.findUnique({
-        where: { id: userId },
-        select: { isBlocked: true }
-      });
+    // Ambil status pengguna terlebih dahulu
+    const currentUser = await db.user.findUnique({
+      where: { id: userId },
+      select: { isBlocked: true }
+    });
 
-      if (currentUser?.isBlocked) {
-        return NextResponse.json({ error: "Akun Anda telah diblokir. Anda tidak dapat melakukan transaksi." }, { status: 403 });
-      }
-
-      // Update address & phone of the logged in user
-      await db.user.update({
-        where: { id: userId },
-        data: {
-          address: shippingAddress,
-          phone: phone
-        }
-      });
-    } else {
-      // Guest Checkout: dynamic guest user registration
-      const guestName = buyerName || "Pembeli Non-Login";
-      const guestEmail = email || `guest-${phone.replace(/[^0-9]/g, "")}@pasarpodosari.id`;
-
-      let guestUser = await db.user.findUnique({
-        where: { email: guestEmail }
-      });
-
-      if (!guestUser) {
-        guestUser = await db.user.create({
-          data: {
-            name: guestName,
-            email: guestEmail,
-            role: "Pembeli",
-            phone: phone,
-            address: shippingAddress,
-            password: "guest_checkout_password"
-          }
-        });
-      } else {
-        // Update existing guest info
-        guestUser = await db.user.update({
-          where: { id: guestUser.id },
-          data: {
-            name: guestName,
-            phone: phone,
-            address: shippingAddress
-          }
-        });
-      }
-      userId = guestUser.id;
+    if (currentUser?.isBlocked) {
+      return NextResponse.json({ error: "Akun Anda telah diblokir. Anda tidak dapat melakukan transaksi." }, { status: 403 });
     }
+
+    // Update address & phone of the logged in user
+    await db.user.update({
+      where: { id: userId },
+      data: {
+        address: shippingAddress,
+        phone: phone
+      }
+    });
 
     // 1. Fetch all products to verify stock and price
     const productIds = items.map(item => item.productId);
@@ -130,7 +98,8 @@ export async function POST(request: Request) {
             sellerId: sellerId === "admin" ? null : sellerId,
             totalAmount: totalAmount,
             paymentMethod: paymentMethod || "COD",
-            status: "Pending",
+            paymentProof: paymentMethod === "TRANSFER" ? paymentProof : null,
+            status: paymentMethod === "TRANSFER" ? "Menunggu Verifikasi" : "Pending",
             items: {
               create: orderItemsList.map(item => ({
                 productId: item.productId,

@@ -10,6 +10,8 @@ interface OrderRecord {
   totalAmount: number;
   status: string;
   createdAt: string;
+  paymentMethod?: string;
+  paymentProof?: string | null;
   items: { productName: string; quantity: number }[];
 }
 
@@ -45,7 +47,7 @@ export function OrderClient({ initialOrders }: { initialOrders: OrderRecord[] })
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
-              {["Tanggal", "Pembeli", "Penjual", "Rincian Barang", "Total", "Status"].map((h) => (
+              {["Tanggal", "Pembeli", "Penjual", "Rincian Barang", "Total", "Pembayaran", "Status"].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium text-muted-foreground">{h}</th>
               ))}
             </tr>
@@ -67,6 +69,16 @@ export function OrderClient({ initialOrders }: { initialOrders: OrderRecord[] })
                 </td>
                 <td className="px-4 py-3 font-medium text-emerald-600">Rp {o.totalAmount.toLocaleString('id-ID')}</td>
                 <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase">{o.paymentMethod || "COD"}</span>
+                    {o.paymentMethod === "TRANSFER" && o.paymentProof && (
+                      <a href={o.paymentProof} target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 hover:underline">
+                        Lihat Bukti
+                      </a>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-1 rounded-md font-medium ${
                     o.status === "Pending" ? "bg-amber-100 text-amber-700" :
                     o.status === "Diproses" ? "bg-indigo-100 text-indigo-700" :
@@ -81,7 +93,7 @@ export function OrderClient({ initialOrders }: { initialOrders: OrderRecord[] })
             ))}
             {filteredOrders.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                   Belum ada pesanan masuk.
                 </td>
               </tr>

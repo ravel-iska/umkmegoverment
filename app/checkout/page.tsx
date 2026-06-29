@@ -13,7 +13,7 @@ import { useStore } from "@/lib/store";
 import { formatPrice } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
-import { Store, MapPin, ArrowRight, Loader2, CheckCircle2, MessageCircle } from "lucide-react";
+import { Store, MapPin, ArrowRight, Loader2, CheckCircle2, MessageCircle, Upload, Image as ImageIcon } from "lucide-react";
 
 function CheckoutForm() {
   const { cart, removeFromCart } = useStore();
@@ -61,29 +61,52 @@ function CheckoutForm() {
   const [shippingAddress, setShippingAddress] = useState("");
   const [phone, setPhone] = useState("");
   const [notes, setNotes] = useState("");
-  const [buyerName, setBuyerName] = useState("");
-  const [email, setEmail] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("COD");
+  const [paymentProof, setPaymentProof] = useState("");
+  const [isUploadingProof, setIsUploadingProof] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState(false);
   const [checkoutData, setCheckoutData] = useState<any>(null);
 
-  // Fill in user data if logged in
+  // Redirect if not logged in
   useEffect(() => {
-    if (user && user.isLoggedIn) {
-      setBuyerName(user.name || "");
-      setEmail(user.email || "");
+    // Only redirect if user is loaded and definitely not logged in
+    if (user !== undefined && user !== null && !user.isLoggedIn) {
+      toast.error("Silakan login terlebih dahulu untuk melakukan pesanan.");
+      router.push("/login?callbackUrl=/checkout");
     }
-  }, [user]);
+  }, [user, router]);
 
+  const handleProofUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File terlalu besar. Maksimal 5MB.");
+      return;
+    }
+
+    setIsUploadingProof(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Gagal mengunggah bukti");
+      setPaymentProof(data.url);
+      toast.success("Bukti transfer berhasil diunggah");
+    } catch (err: any) {
+      toast.error(err.message || "Gagal mengunggah bukti transfer");
+    } finally {
+      setIsUploadingProof(false);
+    }
+  };
 
   const handleCheckout = async () => {
     if (!user || !user.isLoggedIn) {
-      if (!buyerName.trim()) {
-        toast.error("Nama lengkap pembeli wajib diisi.");
-        return;
-      }
+      toast.error("Anda harus login untuk membuat pesanan.");
+      return;
     }
 
     if (!shippingAddress.trim()) {
@@ -96,7 +119,10 @@ function CheckoutForm() {
       return;
     }
 
-
+    if (paymentMethod === "TRANSFER" && !paymentProof) {
+      toast.error("Bukti transfer wajib diunggah.");
+      return;
+    }
     if (itemsToCheckout.length === 0) {
       toast.error("Tidak ada produk yang dipilih untuk checkout.");
       return;
@@ -117,9 +143,10 @@ function CheckoutForm() {
           shippingAddress,
           phone,
           notes,
-          buyerName: user?.isLoggedIn ? user.name : buyerName,
-          email: user?.isLoggedIn ? user.email : email,
+          buyerName: user.name,
+          email: user.email,
           paymentMethod,
+          paymentProof,
         }),
       });
 
@@ -168,14 +195,14 @@ function CheckoutForm() {
           const waNumber = rawPhone.startsWith("0") ? "62" + rawPhone.slice(1) : rawPhone;
 
           // Build WA message
-          const buyerNameFinal = user?.isLoggedIn ? user.name : buyerName;
+          const buyerNameFinal = user.name;
           let waMessage = `Halo Kak ${order.sellerName || "Penjual"} 👋\n\nSaya *${buyerNameFinal || "Pembeli"}* ingin mengonfirmasi pesanan.\n\n`;
           waMessage += `📦 *Detail Pesanan (ID: ${order.orderId.slice(0, 8)}...)*\n`;
           order.items.forEach((item: any) => {
             waMessage += `• ${item.quantity}x ${item.name} — Rp ${item.price.toLocaleString("id-ID")}\n`;
           });
           waMessage += `\n💰 *Total: Rp ${order.totalAmount.toLocaleString("id-ID")}*\n`;
-          waMessage += `💳 Pembayaran: Bayar di Tempat (COD)\n`;
+          waMessage += `💳 Pembayaran: ${paymentMethod === 'TRANSFER' ? 'Transfer Bank' : 'Bayar di Tempat (COD)'}\n`;
           if (shippingAddress) waMessage += `📍 Alamat: ${shippingAddress}\n`;
           if (notes) waMessage += `📝 Catatan: ${notes}\n`;
           waMessage += `\nMohon segera dikonfirmasi ya. Terima kasih! 🙏`;
@@ -232,28 +259,7 @@ function CheckoutForm() {
       <div className="bg-card rounded-xl border p-6 space-y-6">
         <h2 className="font-bold text-xl">Informasi Pengiriman</h2>
 
-        {/* Guest Buyer Information */}
-        {(!user || !user.isLoggedIn) && (
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Nama Lengkap</label>
-              <Input
-                placeholder="Nama lengkap penerima"
-                value={buyerName}
-                onChange={(e) => setBuyerName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Email (opsional)</label>
-              <Input
-                type="email"
-                placeholder="nama@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-          </div>
-        )}
+        {/* Guest Buyer Information Removed (Handled by Login Check) */}
 
         <div className="space-y-4 pt-4 border-t">
           <div>
@@ -290,20 +296,77 @@ function CheckoutForm() {
         <div className="pt-4 border-t">
           <label className="text-sm font-bold text-primary mb-3 block">Metode Pembayaran</label>
           <div className="flex flex-col gap-3">
-            <label className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-muted/50 transition-colors">
+            <label className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${paymentMethod === 'COD' ? 'bg-primary/5 border-primary' : 'hover:bg-muted/50'}`}>
               <input
                 type="radio"
                 name="paymentMethod"
                 value="COD"
                 checked={paymentMethod === "COD"}
-                readOnly
+                onChange={() => setPaymentMethod("COD")}
                 className="w-4 h-4 text-primary"
               />
               <div className="flex flex-col">
-                <span className="font-semibold text-sm">Bayar di Tempat (COD) / Transfer Langsung</span>
-                <span className="text-xs text-muted-foreground">Pembayaran disepakati langsung dengan penjual</span>
+                <span className="font-semibold text-sm">Bayar di Tempat (COD)</span>
+                <span className="text-xs text-muted-foreground">Pembayaran disepakati langsung dengan penjual saat pesanan tiba</span>
               </div>
             </label>
+
+            <label className={`flex items-center gap-3 p-4 border rounded-xl cursor-pointer transition-colors ${paymentMethod === 'TRANSFER' ? 'bg-primary/5 border-primary' : 'hover:bg-muted/50'}`}>
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="TRANSFER"
+                checked={paymentMethod === "TRANSFER"}
+                onChange={() => setPaymentMethod("TRANSFER")}
+                className="w-4 h-4 text-primary"
+              />
+              <div className="flex flex-col">
+                <span className="font-semibold text-sm">Transfer Bank</span>
+                <span className="text-xs text-muted-foreground">Transfer otomatis ke Rekening Bersama (Rekber) untuk keamanan</span>
+              </div>
+            </label>
+
+            {paymentMethod === "TRANSFER" && (
+              <div className="mt-2 p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-blue-900">Instruksi Pembayaran:</p>
+                  <p className="text-sm text-blue-800">Transfer tepat sebesar <b>{formatPrice(totalAmount)}</b> ke rekening berikut:</p>
+                  <div className="bg-white p-3 rounded-lg border border-blue-100 mt-2 flex flex-col gap-1">
+                    <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Bank BRI</span>
+                    <span className="font-mono text-lg font-bold text-slate-800">1234-5678-9012-345</span>
+                    <span className="text-sm font-semibold text-slate-700">a/n Rekber Pasar Podosari</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-blue-900 block">Upload Bukti Transfer <span className="text-red-500">*</span></label>
+                  
+                  {paymentProof ? (
+                    <div className="relative w-full h-32 rounded-lg border overflow-hidden bg-white">
+                      <Image src={paymentProof} alt="Bukti Transfer" fill className="object-cover" />
+                      <button 
+                        onClick={() => setPaymentProof("")}
+                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 shadow-sm hover:bg-red-600 transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-blue-200 rounded-lg cursor-pointer bg-white hover:bg-blue-50/50 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                        {isUploadingProof ? (
+                          <Loader2 className="w-6 h-6 text-blue-500 animate-spin mb-2" />
+                        ) : (
+                          <Upload className="w-6 h-6 text-blue-500 mb-2" />
+                        )}
+                        <p className="text-xs text-blue-600 font-medium">{isUploadingProof ? "Mengunggah..." : "Klik untuk upload foto/screenshot struk"}</p>
+                      </div>
+                      <input type="file" className="hidden" accept="image/*" onChange={handleProofUpload} disabled={isUploadingProof} />
+                    </label>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

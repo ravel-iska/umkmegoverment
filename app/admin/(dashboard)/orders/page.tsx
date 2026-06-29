@@ -16,6 +16,8 @@ export default async function OrdersPage() {
     buyerName: o.user.name,
     sellerName: o.seller?.name || "Toko Tidak Diketahui",
     totalAmount: o.totalAmount,
+    paymentMethod: o.paymentMethod,
+    paymentProof: o.paymentProof,
     status: o.status,
     createdAt: o.createdAt.toISOString().split("T")[0],
     items: o.items.map((i) => ({
